@@ -8,7 +8,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const siteUrl = import.meta.env.MODE === 'production' 
+  ? 'https://dream-whisper-archive.vercel.app'
+  : 'http://localhost:3000';
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce',
+    storage: window.localStorage
+  },
+});
 
 // Storage bucket for dream recordings
 export const STORAGE_BUCKET = 'dream-recordings';
