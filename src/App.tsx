@@ -15,7 +15,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <style jsx global>{`
+      <style>{`
         @keyframes floatStar {
           0% { transform: translateY(0) rotate(0deg); }
           50% { transform: translateY(-10px) rotate(5deg); }
