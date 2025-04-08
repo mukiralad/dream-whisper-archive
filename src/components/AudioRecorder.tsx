@@ -1,9 +1,13 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, Square, Play, Save } from "lucide-react";
+import { Mic, Square, Play, Save, Pause } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useDreamContext } from "@/contexts/DreamContext";
 import { v4 as uuidv4 } from "uuid";
+import { cn } from "@/lib/utils";
+import { Slider } from "@/components/ui/slider";
+
+const MAX_RECORDING_SIZE = 5 * 1024 * 1024; // 5MB in bytes
 
 export const AudioRecorder = () => {
   const { toast } = useToast();
@@ -12,6 +16,9 @@ export const AudioRecorder = () => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [waveformData, setWaveformData] = useState<number[]>([]);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<BlobPart[]>([]);
@@ -140,9 +147,21 @@ export const AudioRecorder = () => {
   const saveRecording = () => {
     if (!audioUrl) return;
     
+    const audioBlob = new Blob(audioChunksRef.current, { type: "audio/wav" });
+    
+    // Check file size before saving
+    if (audioBlob.size > MAX_RECORDING_SIZE) {
+      toast({
+        title: "Recording too large",
+        description: "Recording exceeds 5MB limit. Please record a shorter dream.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     const newDream = {
       id: uuidv4(),
-      audioBlob: new Blob(audioChunksRef.current, { type: "audio/wav" }),
+      audioBlob,
       audioUrl,
       title: `Dream ${new Date().toLocaleString()}`,
       createdAt: new Date(),
@@ -162,16 +181,65 @@ export const AudioRecorder = () => {
   };
 
   const playRecording = () => {
-    if (!audioUrl) return;
+    if (!audioUrl || !audioRef.current) return;
     
-    const audio = new Audio(audioUrl);
-    audio.play();
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      // Stop any other playing audio before playing this one
+      document.querySelectorAll('audio').forEach(audio => audio.pause());
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
     
     toast({
-      title: "Playing recording",
+      title: isPlaying ? "Paused" : "Playing recording",
       description: "Listen to your recorded dream.",
     });
   };
+
+  const handleSliderChange = (value: number[]) => {
+    if (!audioRef.current) return;
+    audioRef.current.currentTime = value[0];
+    setCurrentTime(value[0]);
+  };
+
+  const formatTime = (time: number) => {
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  // Set up audio player when URL changes
+  useEffect(() => {
+    if (!audioUrl) {
+      setIsPlaying(false);
+      setCurrentTime(0);
+      return;
+    }
+
+    audioRef.current = new Audio(audioUrl);
+    const audio = audioRef.current;
+
+    const handleTimeUpdate = () => {
+      setCurrentTime(audio.currentTime);
+    };
+
+    const handleEnded = () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    };
+
+    audio.addEventListener('timeupdate', handleTimeUpdate);
+    audio.addEventListener('ended', handleEnded);
+
+    return () => {
+      audio.removeEventListener('timeupdate', handleTimeUpdate);
+      audio.removeEventListener('ended', handleEnded);
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }, [audioUrl]);
 
   // Clean up resources when component unmounts
   useEffect(() => {
@@ -185,12 +253,16 @@ export const AudioRecorder = () => {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
     };
   }, []);
 
   return (
     <div className="flex flex-col items-center gap-6 w-full max-w-md mx-auto">
-      <div className="flex items-center justify-center w-full h-32 relative rounded-xl glass p-4">
+      <div className="flex flex-col w-full h-32 relative rounded-xl glass p-4">
         {/* Waveform Visualization */}
         <div className="flex items-center justify-center gap-1 w-full h-full">
           {isRecording ? (
@@ -211,7 +283,12 @@ export const AudioRecorder = () => {
             waveformData.map((value, index) => (
               <div
                 key={index}
-                className="w-1 bg-primary/70 rounded-full transition-all duration-200"
+                className={cn(
+                  "w-1 rounded-full transition-colors duration-300",
+                  currentTime / recordingTime > index / waveformData.length
+                    ? "bg-primary/70"
+                    : "bg-accent/70"
+                )}
                 style={{
                   height: `${Math.max(5, value * 70)}px`,
                 }}
@@ -234,7 +311,20 @@ export const AudioRecorder = () => {
         {/* Timer */}
         {(isRecording || audioUrl) && (
           <div className="absolute top-2 right-2 bg-background/80 backdrop-blur px-2 py-1 rounded-md text-xs font-medium">
-            {recordingTime}s
+            {isRecording ? `${recordingTime}s` : formatTime(currentTime)}
+          </div>
+        )}
+
+        {/* Audio controls */}
+        {audioUrl && !isRecording && (
+          <div className="absolute bottom-2 left-2 right-2">
+            <Slider
+              value={[currentTime]}
+              max={recordingTime}
+              step={0.1}
+              onValueChange={handleSliderChange}
+              className="w-full"
+            />
           </div>
         )}
       </div>
@@ -270,8 +360,17 @@ export const AudioRecorder = () => {
               variant="secondary"
               className="transition-all duration-300 hover:scale-105"
             >
-              <Play className="mr-2 h-4 w-4" />
-              Play
+              {isPlaying ? (
+                <>
+                  <Pause className="mr-2 h-4 w-4" />
+                  Pause
+                </>
+              ) : (
+                <>
+                  <Play className="mr-2 h-4 w-4" />
+                  Play
+                </>
+              )}
             </Button>
             
             <Button 

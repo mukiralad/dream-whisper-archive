@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useDreamContext } from "@/contexts/DreamContext";
 import { DreamCard } from "./DreamCard";
@@ -6,7 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { format } from "date-fns";
 
 export const DreamTimeline = () => {
-  const { dreams } = useDreamContext();
+  const { dreams, isLoading } = useDreamContext();
 
   // Group dreams by date
   const dreamsByDate = dreams.reduce((acc, dream) => {
@@ -21,6 +20,18 @@ export const DreamTimeline = () => {
   const sortedDates = Object.keys(dreamsByDate).sort((a, b) => {
     return new Date(b).getTime() - new Date(a).getTime();
   });
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-60 text-center p-4">
+        <div className="text-4xl mb-4 opacity-20">🌙</div>
+        <h3 className="text-lg font-medium mb-1">Loading dreams...</h3>
+        <p className="text-sm text-muted-foreground">
+          Please wait while we fetch your dreams.
+        </p>
+      </div>
+    );
+  }
 
   if (dreams.length === 0) {
     return (
