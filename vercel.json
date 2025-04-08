@@ -3,12 +3,8 @@
   "devCommand": "npm run dev",
   "framework": "vite",
   "outputDirectory": "dist",
-  "routes": [
-    {
-      "src": "/[^.]+",
-      "dest": "/",
-      "status": 200
-    }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {
