@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, ReactNode, useEffect } from
 import { Dream } from "../types/dream";
 import { supabase, STORAGE_BUCKET, initializeStorage } from "@/lib/supabase";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "./AuthContext";
 
 interface DreamContextType {
   dreams: Dream[];
@@ -19,21 +20,29 @@ export const DreamProvider = ({ children }: { children: ReactNode }) => {
   const [selectedDreamId, setSelectedDreamId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const { user } = useAuth();
 
-  // Initialize storage and fetch dreams on component mount
+  // Initialize storage and fetch dreams on component mount or when user changes
   useEffect(() => {
-    const init = async () => {
-      await initializeStorage();
-      await fetchDreams();
-    };
-    init();
-  }, []);
+    if (user) {
+      const init = async () => {
+        await initializeStorage();
+        await fetchDreams();
+      };
+      init();
+    } else {
+      setDreams([]);
+    }
+  }, [user]);
 
   const fetchDreams = async () => {
+    if (!user) return;
+
     try {
       const { data, error } = await supabase
         .from('dreams')
         .select('*')
+        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -46,7 +55,7 @@ export const DreamProvider = ({ children }: { children: ReactNode }) => {
           data.map(async (item) => {
             const { data: signedUrl } = await supabase.storage
               .from(STORAGE_BUCKET)
-              .createSignedUrl(`${item.id}.wav`, 3600); // 1 hour expiry
+              .createSignedUrl(`${user.id}/${item.id}.wav`, 3600); // 1 hour expiry
 
             return {
               id: item.id,
@@ -73,11 +82,13 @@ export const DreamProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const addDream = async (dream: Dream) => {
+    if (!user) return;
+
     try {
-      // Upload audio file to storage
+      // Upload audio file to storage in user's folder
       const { error: uploadError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .upload(`${dream.id}.wav`, dream.audioBlob, {
+        .upload(`${user.id}/${dream.id}.wav`, dream.audioBlob, {
           contentType: 'audio/wav',
           cacheControl: '3600',
         });
@@ -89,9 +100,9 @@ export const DreamProvider = ({ children }: { children: ReactNode }) => {
       // Get a signed URL for the uploaded file
       const { data: signedUrl } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .createSignedUrl(`${dream.id}.wav`, 3600);
+        .createSignedUrl(`${user.id}/${dream.id}.wav`, 3600);
 
-      // Save dream metadata to database
+      // Save dream metadata to database with user_id
       const { error: dbError } = await supabase
         .from('dreams')
         .insert([
@@ -100,7 +111,8 @@ export const DreamProvider = ({ children }: { children: ReactNode }) => {
             title: dream.title,
             created_at: dream.createdAt.toISOString(),
             duration: dream.duration,
-            waveform: dream.waveform
+            waveform: dream.waveform,
+            user_id: user.id
           }
         ]);
 
@@ -131,11 +143,13 @@ export const DreamProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const removeDream = async (id: string) => {
+    if (!user) return;
+
     try {
       // Remove audio file from storage
       const { error: storageError } = await supabase.storage
         .from(STORAGE_BUCKET)
-        .remove([`${id}.wav`]);
+        .remove([`${user.id}/${id}.wav`]);
 
       if (storageError) {
         throw storageError;
@@ -145,7 +159,8 @@ export const DreamProvider = ({ children }: { children: ReactNode }) => {
       const { error: dbError } = await supabase
         .from('dreams')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user.id);
 
       if (dbError) {
         throw dbError;

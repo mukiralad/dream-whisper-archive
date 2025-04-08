@@ -2,6 +2,7 @@ import React from "react";
 import { MoonIcon, SunIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "next-themes";
+import { ProfileButton } from "@/components/ProfileButton";
 
 export const Header: React.FC = () => {
   const { theme, setTheme } = useTheme();
@@ -33,6 +34,7 @@ export const Header: React.FC = () => {
           )}
           {theme === "dark" ? "Light Mode" : "Night Mode"}
         </Button>
+        <ProfileButton />
       </div>
     </header>
   );

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Mic, Square, Play, Save, Pause } from "lucide-react";
+import { Mic, Square, Play, Save, Pause, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
 import { useDreamContext } from "@/contexts/DreamContext";
 import { v4 as uuidv4 } from "uuid";
@@ -13,6 +13,7 @@ export const AudioRecorder = () => {
   const { toast } = useToast();
   const { addDream } = useDreamContext();
   const [isRecording, setIsRecording] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [waveformData, setWaveformData] = useState<number[]>([]);
@@ -26,6 +27,8 @@ export const AudioRecorder = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const timerRef = useRef<number | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const recordingStartTimeRef = useRef<number>(0);
+  const recordingPausedTimeRef = useRef<number>(0);
 
   const startRecording = async () => {
     try {
@@ -58,9 +61,13 @@ export const AudioRecorder = () => {
       };
       
       // Start the timer
-      const startTime = Date.now();
+      recordingStartTimeRef.current = Date.now();
       timerRef.current = window.setInterval(() => {
-        setRecordingTime(Math.floor((Date.now() - startTime) / 1000));
+        if (!isPaused) {
+          const elapsedTime = recordingPausedTimeRef.current + 
+            (Date.now() - recordingStartTimeRef.current);
+          setRecordingTime(Math.floor(elapsedTime / 1000));
+        }
       }, 1000);
       
       // Start visualizing the audio
@@ -68,6 +75,7 @@ export const AudioRecorder = () => {
       
       mediaRecorder.start();
       setIsRecording(true);
+      setIsPaused(false);
       audioChunksRef.current = [];
       
       toast({
@@ -84,10 +92,37 @@ export const AudioRecorder = () => {
     }
   };
 
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.pause();
+      recordingPausedTimeRef.current += Date.now() - recordingStartTimeRef.current;
+      setIsPaused(true);
+      
+      toast({
+        title: "Recording paused",
+        description: "Click resume to continue recording.",
+      });
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.resume();
+      recordingStartTimeRef.current = Date.now();
+      setIsPaused(false);
+      
+      toast({
+        title: "Recording resumed",
+        description: "Continue speaking to capture your dream.",
+      });
+    }
+  };
+
   const stopRecording = () => {
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
+      setIsPaused(false);
       
       // Stop all the active processes
       if (timerRef.current) {
@@ -108,6 +143,26 @@ export const AudioRecorder = () => {
         description: `Captured ${recordingTime} seconds of audio.`,
       });
     }
+  };
+
+  const discardRecording = () => {
+    // Clean up the audio URL
+    if (audioUrl) {
+      URL.revokeObjectURL(audioUrl);
+    }
+    
+    // Reset all states
+    setAudioUrl(null);
+    setRecordingTime(0);
+    setWaveformData([]);
+    setIsPlaying(false);
+    setCurrentTime(0);
+    recordingPausedTimeRef.current = 0;
+    
+    toast({
+      title: "Recording discarded",
+      description: "Start a new recording when you're ready.",
+    });
   };
 
   const visualizeAudio = () => {
@@ -273,7 +328,7 @@ export const AudioRecorder = () => {
                 className="w-1 bg-accent/80 rounded-full"
                 style={{
                   height: `${Math.max(5, value * 70)}px`,
-                  animation: `wave ${0.5 + Math.random() * 0.5}s ease-in-out infinite`,
+                  animation: isPaused ? 'none' : `wave ${0.5 + Math.random() * 0.5}s ease-in-out infinite`,
                   animationDelay: `${index * 0.05}s`
                 }}
               />
@@ -342,15 +397,38 @@ export const AudioRecorder = () => {
         )}
 
         {isRecording && (
-          <Button 
-            onClick={stopRecording} 
-            variant="destructive" 
-            className="transition-all duration-300 hover:scale-105"
-            size="lg"
-          >
-            <Square className="mr-2 h-4 w-4" />
-            Stop Recording
-          </Button>
+          <>
+            {isPaused ? (
+              <Button 
+                onClick={resumeRecording}
+                variant="secondary" 
+                className="transition-all duration-300 hover:scale-105"
+                size="lg"
+              >
+                <Play className="mr-2 h-4 w-4" />
+                Resume
+              </Button>
+            ) : (
+              <Button 
+                onClick={pauseRecording}
+                variant="secondary" 
+                className="transition-all duration-300 hover:scale-105"
+                size="lg"
+              >
+                <Pause className="mr-2 h-4 w-4" />
+                Pause
+              </Button>
+            )}
+            <Button 
+              onClick={stopRecording} 
+              variant="destructive" 
+              className="transition-all duration-300 hover:scale-105"
+              size="lg"
+            >
+              <Square className="mr-2 h-4 w-4" />
+              Stop
+            </Button>
+          </>
         )}
 
         {audioUrl && (
@@ -380,6 +458,15 @@ export const AudioRecorder = () => {
             >
               <Save className="mr-2 h-4 w-4" />
               Save Dream
+            </Button>
+
+            <Button 
+              onClick={discardRecording} 
+              variant="destructive"
+              className="transition-all duration-300 hover:scale-105"
+            >
+              <Trash2 className="mr-2 h-4 w-4" />
+              Discard
             </Button>
           </>
         )}
