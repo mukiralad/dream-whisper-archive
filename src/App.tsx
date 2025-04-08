@@ -9,6 +9,7 @@ import { ProtectedRoute } from "./components/auth/ProtectedRoute";
 import { Login } from "./components/auth/Login";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
+import LandingPage from "./pages/LandingPage";
 
 // Create a client
 const queryClient = new QueryClient();
@@ -46,9 +47,10 @@ const App = () => (
         <BrowserRouter>
           <AuthProvider>
             <Routes>
+              <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<Login />} />
               <Route
-                path="/"
+                path="/dashboard"
                 element={
                   <ProtectedRoute>
                     <Index />

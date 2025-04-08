@@ -1,4 +1,3 @@
-
 import React from "react";
 import { AudioRecorder } from "@/components/AudioRecorder";
 import { DreamTimeline } from "@/components/DreamTimeline";
@@ -9,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Mic, BookOpen, Moon, CloudMoon, Star } from "lucide-react";
 import { FeaturesSection } from "@/components/FeaturesSection";
 import { QuoteSection } from "@/components/QuoteSection";
+import { WelcomeMessage } from "@/components/WelcomeMessage";
 
 const Index = () => {
   return (
@@ -22,6 +22,7 @@ const Index = () => {
           <main className="mt-8">
             <section className="mb-12">
               <div className="text-center mb-8">
+                <WelcomeMessage />
                 <h2 className="text-3xl md:text-4xl font-bold mb-3 tracking-tight text-shadow">
                   Capture Your Dreams
                 </h2>
